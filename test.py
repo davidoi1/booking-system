@@ -13,14 +13,10 @@ def get_booking_table():
     df = df.set_index(df['date'])
     df = df.drop(columns=['date'])
 
-    print(df)
-
     df = df.resample('D').first().fillna('FREE')
     df = df.reset_index()
 
     df['date'] = df['date'].dt.date
-
-    print(df)
 
     table = dash_table.DataTable(
         id='booking-table',
