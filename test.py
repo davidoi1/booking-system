@@ -1,73 +1,44 @@
-import dash
-from dash import html, dcc
-from dash.dependencies import Input, Output, State
+import pandas as pd
+from datetime import datetime, timedelta
+from dash import dash_table
 
-app = dash.Dash(__name__)
 
-number_buttons = [html.Button(str(i), id=f'number-{i}') for i in range(10)]
-operation_buttons = [html.Button(op, id=f'operation-{op}') for op in ['+', '-', '*', '/']]
-equal_button = html.Button('=', id='equal')
-clear_button = html.Button('C', id='clear')
+def get_booking_table():
+    df = pd.read_csv('test_data.csv')
+    df['date'] = pd.to_datetime(df['date'], dayfirst=True)
 
-app.layout = html.Div([
-    html.Div(number_buttons),
-    html.Div(operation_buttons),
-    equal_button,
-    clear_button,
-    html.Div(id='output'),
-    html.Div(id='result-output'),  # New output window for the result
-    dcc.Store(id='store', data='')
-])
+    current_datetime = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=270)
+    df.loc[len(df.index)] = [current_datetime, None]
 
-@app.callback(
-    Output('store', 'data'),
-    [Input(f'number-{i}', 'n_clicks') for i in range(10)] +
-    [Input(f'operation-{op}', 'n_clicks') for op in ['+', '-', '*', '/']] +
-    [Input('equal', 'n_clicks'),
-     Input('clear', 'n_clicks')],  # Include clear button in the inputs
-    [State('store', 'data')]
-)
-def update_store(*args):
-    store_data = args[-1]
-    button_id = dash.callback_context.triggered[0]['prop_id'].split('.')[0]
-    if button_id == 'equal':
-        try:
-            store_data = str(eval(store_data))
-        except Exception:
-            store_data = 'Error'
-    elif button_id == 'clear':
-        store_data = ''
-    elif button_id != 'store':
-        value = button_id.split('-')[1]
-        if button_id.startswith('operation') and store_data and store_data[-1] in ['+', '*', '/']:
-            store_data = store_data[:-1] + value
-        elif button_id == 'operation--':
-            store_data += '-'
-        else:
-            store_data += value
-    return store_data
+    df = df.set_index(df['date'])
+    df = df.drop(columns=['date'])
 
-@app.callback(
-    Output('output', 'children'),
-    [Input('store', 'data')]
-)
-def display_output(store_data):
-    return store_data
+    print(df)
 
-@app.callback(
-    Output('result-output', 'children'),  # Update the result output window
-    [Input('equal', 'n_clicks')],
-    [State('store', 'data')]
-)
-def display_result(equal_clicks, store_data):
-    if equal_clicks is not None and equal_clicks > 0:
-        try:
-            result = str(eval(store_data))
-        except Exception:
-            result = 'Error'
-        return f'Result: {result}'
-    else:
-        return ''
+    df = df.resample('D').first().fillna('FREE')
+    df = df.reset_index()
+
+    df['date'] = df['date'].dt.date
+
+    print(df)
+
+    table = dash_table.DataTable(
+        id='booking-table',
+        data=df.to_dict('records'),
+        columns=[{"name": i, "id": i} for i in df.columns],
+        page_size=60,
+        style_data_conditional=[
+            {
+                'if': {'column_id': 'name',
+                       'filter_query': '{name} = "FREE"'},
+
+                'backgroundColor': 'green'
+            }
+        ]
+    )
+
+    return table
+
 
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    get_booking_table()
