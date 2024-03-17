@@ -5,9 +5,9 @@ from dash import dash_table
 
 def get_booking_table():
     df = pd.read_csv('test_data.csv')
-    df['date'] = pd.to_datetime(df['date'], dayfirst=True)
+    df['date'] = pd.to_datetime(df['date'])
 
-    current_datetime = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=270)
+    current_datetime = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=180)
     df.loc[len(df.index)] = [current_datetime, None]
 
     df = df.set_index(df['date'])

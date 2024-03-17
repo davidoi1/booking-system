@@ -4,9 +4,62 @@ from dash import Dash, dcc, html, dash_table, Input, Output, State
 from dash.dependencies import Input, Output, State, ALL
 from datetime import datetime, timedelta
 
-from test import get_booking_table
+# old way of getting booking table from csv file
+#from test import get_booking_table
+# booking_table = get_booking_table()
 
-booking_table = get_booking_table()
+from sqlalchemy import create_engine, text
+from db_credentials import db_connnection_string
+
+def get_booking_table():
+    engine = create_engine(db_connnection_string)
+    booking_table_df = pd.read_sql('select * from booking_table', con=engine)
+
+    booking_table_df['date'] = pd.to_datetime(booking_table_df['date'])
+    current_datetime = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=180)
+    booking_table_df.loc[len(booking_table_df.index)] = [current_datetime, None]
+
+    booking_table_df = booking_table_df.set_index(booking_table_df['date'])
+    booking_table_df = booking_table_df.drop(columns=['date'])
+
+    booking_table_df = booking_table_df.resample('D').first().fillna('FREE')
+    booking_table_df = booking_table_df.reset_index()
+
+    booking_table_df['date'] = booking_table_df['date'].dt.date
+    print(booking_table_df)
+
+    # creating dash table
+    table = dash_table.DataTable(
+            id='booking-table',
+            data=booking_table_df.to_dict('records'),
+            columns=[{"name": i, "id": i} for i in booking_table_df.columns],
+            page_size=60,
+            style_data_conditional=[
+                {
+                    'if': {'column_id': 'name',
+                           'filter_query': '{name} = "FREE"'},
+
+                    'backgroundColor': 'green'
+                }
+            ]
+        )
+
+    return table
+
+def sql_update(date, name):
+    engine = create_engine(db_connnection_string)
+
+    with engine.connect() as con:
+        sql = text(f"REPLACE into booking_table (date, name) values (:date, :name)")
+        params = {'name': name, 'date': date}
+
+        con.execute(sql, parameters=params)
+
+        con.commit()
+
+
+table = get_booking_table()
+
 
 app = Dash(__name__)
 
@@ -32,7 +85,7 @@ app.layout = html.Div([
         html.Button('Submit', id='submit-btn')
     ], style={'padding-bottom': '30px'}),
 
-    booking_table
+    table
 ])
 
 
@@ -85,17 +138,29 @@ def update_booking_table(clicks, date, name, days, data):
     date = datetime.strptime(date, '%Y-%m-%d')
 
     for i in range(days):
-
         cur_date = date + timedelta(days=i)
-        df.loc[df['date'] == cur_date, 'name'] = name
-        print(df[df['date'] == date])
+        cur_date = cur_date.date()
+        sql_update(cur_date, name)
 
-    df['date'] = df['date'].dt.date
+    # ToDo: rewrite into function
+    engine = create_engine(db_connnection_string)
+    booking_table_df = pd.read_sql('select * from booking_table', con=engine)
 
-    df.to_csv('test_data.csv', index=False)
+    booking_table_df['date'] = pd.to_datetime(booking_table_df['date'])
+    current_datetime = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=180)
+    booking_table_df.loc[len(booking_table_df.index)] = [current_datetime, None]
 
-    return df.to_dict('records')
+    booking_table_df = booking_table_df.set_index(booking_table_df['date'])
+    booking_table_df = booking_table_df.drop(columns=['date'])
+
+    booking_table_df = booking_table_df.resample('D').first().fillna('FREE')
+    booking_table_df = booking_table_df.reset_index()
+
+    booking_table_df['date'] = booking_table_df['date'].dt.date
+    print(booking_table_df)
+
+    return booking_table_df.to_dict('records')
 
 
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    app.run_server()
