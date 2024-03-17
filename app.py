@@ -58,9 +58,6 @@ def sql_update(date, name):
         con.commit()
 
 
-table = get_booking_table()
-
-
 app = Dash(__name__)
 
 app.layout = html.Div([
@@ -85,9 +82,18 @@ app.layout = html.Div([
         html.Button('Submit', id='submit-btn')
     ], style={'padding-bottom': '30px'}),
 
-    table
+    dcc.Location(id='url'),
+    html.Div(id='booking-table-div')
 ])
 
+@app.callback(
+    Output('booking-table-div', 'children'),
+    Input('url', 'pathname')
+)
+def load_page(pathname):
+    table = get_booking_table()
+
+    return [table]
 
 @app.callback(
     Output('date-input', 'value'),
